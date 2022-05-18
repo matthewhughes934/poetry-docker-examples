@@ -1,0 +1,9 @@
+# A very aggressive ignore file, just because our project is so simple
+# and to keep the images as small as possible
+**
+!pyproject.toml
+!poetry.lock
+!src/**
+src/**/__pycache__
+!tests/**
+tests/**/__pycache__
