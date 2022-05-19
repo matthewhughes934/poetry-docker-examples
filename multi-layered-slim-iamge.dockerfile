@@ -12,16 +12,17 @@ RUN \
         gcc \
         libc-dev \
         libpcre3-dev; \
-    rm --recursive --force /var/lib/apt/lists/*
+    rm --recursive --force /var/lib/apt/lists/*; \
+    python -m venv /pip_venv; \
+    /pip_venv/bin/pip install --progress-bar off --no-cache poetry
 
 COPY pyproject.toml poetry.lock ./
 
 RUN \
-    python -m venv /pip_venv; \
     python -m venv $VIRTUAL_ENV_PATH; \
     source $VIRTUAL_ENV_PATH/bin/activate; \
-    /pip_venv/bin/pip install poetry; \
-    /pip_venv/bin/poetry install --no-dev
+    POETRY_CACHE_DIR=/tmp/poetry-cache /pip_venv/bin/poetry install --no-dev; \
+    rm --recursive /tmp/poetry-cache
 
 FROM build as dev-build
 SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]
@@ -30,7 +31,8 @@ ARG VIRTUAL_ENV_PATH
 
 RUN \
     source $VIRTUAL_ENV_PATH/bin/activate; \
-    /pip_venv/bin/poetry install
+    POETRY_CACHE_DIR=/tmp/poetry-cache /pip_venv/bin/poetry install; \
+    rm --recursive /tmp/poetry-cache
 
 FROM python:3.10-slim-buster AS production
 SHELL ["/bin/bash", "-o", "errexit", "-o", "nounset", "-o", "pipefail", "-c"]

@@ -1,6 +1,7 @@
-# A very aggressive ignore file, just because our project is so simple
-# and to keep the images as small as possible
+# Ignore all
 **
+
+# explicitly include what we want
 !pyproject.toml
 !poetry.lock
 !src/**

@@ -10,8 +10,9 @@ See `basic-full-image.dockerfile`.
 Size:
 
 ```
+$ docker build --tag basic-full-image --file basic-full-image.dockerfile .
 $ docker images basic-full-image --format "{{.Size}}"
-1.08GB
+912MB
 ```
 
 ## Basic Slim Image
@@ -30,14 +31,9 @@ Using a slim Debian image. We now need to install some extra dependencies:
 Building:
 
 ```
-docker build --tag layered-slim-image --file layered-slim-image.dockerfile .
-```
-
-Size:
-
-```
+$ docker build --tag basic-slim-image --file basic-slim-image.dockerfile .
 $ docker images basic-slim-image --format "{{.Size}}"
-424MB
+293MB
 ```
 
 ## Slim Image with Stages
@@ -47,7 +43,7 @@ Size:
 ```
 $ docker build --tag layered-slim-image --file layered-slim-image.dockerfile .
 $ docker images layered-slim-image --format "{{.Size}}"
-248MB
+211MB
 ```
 
 ## Slim Images with multiple Stages
@@ -65,9 +61,5 @@ Development image:
 ```
 $ docker build --target development --tag multi-layered-slim-image-development --file multi-layered-slim-iamge.dockerfile .
 $ docker images multi-layered-slim-image-development --format "{{.Size}}"
-211MB
+233MB
 ```
-
-## Slim Images with build cache
-
-[](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/#apt-get)
