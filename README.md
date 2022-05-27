@@ -132,7 +132,7 @@ sys	0m0.122s
 Production image:
 
 ```
-$ docker build --target production --tag multi-layered-slim-image --file multi-layered-slim-iamge.dockerfile .
+$ docker build --target production --tag multi-layered-slim-image --file multi-layered-slim-image.dockerfile .
 $ docker images multi-layered-slim-image --format "{{.Size}}"
 140MB
 ```
@@ -140,7 +140,7 @@ $ docker images multi-layered-slim-image --format "{{.Size}}"
 Development image:
 
 ```
-$ docker build --target development --tag multi-layered-slim-image-development --file multi-layered-slim-iamge.dockerfile .
+$ docker build --target development --tag multi-layered-slim-image-development --file multi-layered-slim-image.dockerfile .
 $ docker images multi-layered-slim-image-development --format "{{.Size}}"
 233MB
 ```
@@ -150,7 +150,7 @@ transferring context between images also takes time (that grows as the size of
 this, i.e. the size of Python packages, grows):
 
 ```
-$ time docker build --quiet --no-cache --file multi-layered-slim-iamge.dockerfile . >/dev/null
+$ time docker build --quiet --no-cache --file multi-layered-slim-image.dockerfile . >/dev/null
 
 real	0m57.473s
 user	0m0.243s
@@ -158,9 +158,9 @@ sys	0m0.065s
 ```
 
 ```
-$ docker build --quiet --file multi-layered-slim-iamge.dockerfile . >/dev/null
+$ docker build --quiet --file multi-layered-slim-image.dockerfile . >/dev/null
 $ echo '# cache busting comment' >> pyproject.toml
-$ time docker build --quiet --file multi-layered-slim-iamge.dockerfile . >/dev/null
+$ time docker build --quiet --file multi-layered-slim-image.dockerfile . >/dev/null
 
 real	0m26.507s
 user	0m0.254s
