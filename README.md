@@ -241,3 +241,35 @@ real	0m15.862s
 user	0m0.036s
 sys	0m0.043s
 ```
+
+### Layered Slim Image with Cache mounting
+
+Size, note we no longer have cache in the final image, since it exists only in
+the intermediate layer:
+
+```
+$ DOCKER_BUILDKIT=1 docker build --quiet --progress plain --tag layered-slim-image-buildkit --file layered-slim-image-buildkit.dockerfile . >/dev/null
+$ docker images layered-slim-image-buildkit --format '{{ .Size }}'
+211MB
+```
+
+Uncached build time
+
+```
+$ time DOCKER_BUILDKIT=1 docker build --progress plain --no-cache --file layered-slim-image-buildkit.dockerfile . >/dev/null
+
+real	0m35.408s
+user	0m0.283s
+sys	0m0.102s
+```
+
+Build with simulated new dependency:
+
+```
+$ DOCKER_BUILDKIT=1 docker build --quiet --progress plain --file layered-slim-image-buildkit.dockerfile . >/dev/null
+$ time DOCKER_BUILDKIT=1 docker build --quiet --progress plain --file layered-slim-image-buildkit.dockerfile . >/dev/null
+
+real	0m16.724s
+user	0m0.059s
+sys	0m0.011s
+```
