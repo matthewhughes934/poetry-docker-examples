@@ -63,6 +63,20 @@ This is by far the most complicated setup, and requires managing two images (the
 production one and the dev one for testing etc.) but should result in the
 smallest production image.
 
+### `layered-slim-image-pip-wheels`
+
+A different approach to the dual layer build. Instead of building dependencies
+into a virtualenv and copying that across, build their wheels and copy them
+across and finally install them in the production image.
+
+This results in a large image since the production image includes both the
+installed dependencies and the wheels they were installed from (even though we
+`rm` them, since they were included in a layer from a `COPY` instruction).
+However, copying the wheels _should be_ quicker than copying the entire
+virtualenv since there are fewer files: one `*.whl` file per dependency rather
+than however many files the installed package expands to (though I've yet to
+benchmark this).
+
 ## Sizes
 
 Sizes taken from
@@ -78,6 +92,7 @@ docker images --format '{{.Size}}' <image-tag>
 | `layered-slim-image` | 260MB |
 | `multi-layered-slim-image` | 190MB |
 | `multi-layared-slim-image-dev` | 324MB |
+| `layered-slim-image-pip-wheels` | 282MB |
 
 ## Uncached build times
 
