@@ -1,161 +1,129 @@
 # Poetry + Docker Examples
 
-## Basic Full Image
+Basic summary:
 
-See `basic-full-image.dockerfile`.
+  - Avoid using any caches from `pip`, `poetry`, or `apt`
+  - Install all packages into a virtualenv via the standard library's `venv`
+  - Use a non-root user to run container
+  - Minimise number of layers
+  - Minimise build time, mostly via maximising cache-hits
 
-* `poetry` install is cached in the top layer (never reinstalled)
-* Reinstalls all dependencies if `pyproject.toml` or `poetry.lock` are changed
+The general trend is that there is a trade off between simplicity and final
+image size.
 
-Size:
+There is a `Makefile` to make testing a bit simpler. You can run `make
+<image-name>` where `image-name` is any of the `*.dockerfile` files with the
+`.dockerfile` suffix removed, e.g. `make basic-full-image`. You can additionally
+pass `BUILD_ARGS` to pass extra args to `docker build` e.g. `make
+basic-full-image BUILD_ARGS='--no-cache'`
 
-```
-$ docker build --quiet --tag basic-full-image --file basic-full-image.dockerfile . >/dev/null
-$ docker images basic-full-image --format "{{.Size}}"
-912MB
-```
+## Overview
 
-Uncached build time:
+### `basic-full-image`
 
-```
-$ time docker build --quiet --no-cache --file basic-full-image.dockerfile . >/dev/null
+About as simple as possible. This just uses a full Debian based python image and
+installs all the dependencies on top.
 
-real	0m25.796s
-user	0m0.305s
-sys	0m0.099s
-```
+### `basic-slim-image`
 
-Build time after simulating adding a new dependency (with build cache), this
-skips the install of `pip` and does a full re-install of all dependencies:
-
-```
-# warm up the cache
-$ docker build --quiet --file basic-full-image.dockerfile . >/dev/null
-# simulate a new dependency
-$ echo '# cache busting comment' >> pyproject.toml
-$ time docker build --quiet --file basic-full-image.dockerfile . >/dev/null
-
-real	0m17.363s
-user	0m0.223s
-sys	0m0.061s
-```
-
-## Basic Slim Image
-
-Using a slim Debian image. We now need to install some extra dependencies:
+Uses a slim Debian based Python image. This means we have to manually add some
+required build and run-time dependencies. Specifically:
 
 * A C compiler (`gcc`) since we need to build a C extension
 * `libc-dev` development files and headers for the GNU C library
 * `libprce3-dev` just for demonstration. This is just an optional extra for
 `uwsgi`
 
-* Installation of the extra deps listed above is cached in the top layer (never reinstalled)
-* `poetry` install is cached in the top layer (never reinstalled)
-* Reinstalls all dependencies if `pyproject.toml` or `poetry.lock` are changed
+We save space on all the extra bits installed on the full Debian image that we
+don't need.
 
-Building:
+### `layered-slim-image`
 
-```
-$ docker build --tag basic-slim-image --file basic-slim-image.dockerfile .
-$ docker images basic-slim-image --format "{{.Size}}"
-293MB
-```
+Builds all dependencies into a virtualenv a slim Debian based Python image. This
+virtualenv is then copied into a final slim Debian based python image which also
+includes some required run-time dependencies. Specifically:
 
-Uncached build time, takes longer than the full image since we have extra
-packages to install:
+* `libprce3` just for demonstration. This is just an optional extra for
+`uwsgi`, it is the run-time counterpart to `libprce3-dev`
 
-```
-$ time docker build --no-cache --quiet --file basic-slim-image.dockerfile . >/dev/null
+We save space on the difference in size between the build-time and run-time
+dependencies.
 
-real	0m33.953s
-user	0m0.259s
-sys	0m0.096s
-```
+### `multi-layared-slim-image`
 
-Build with simulated new dependency:
+All stages are slim Debian based Python images. Constructs a base builder image
+with build dependencies then constructs an image for building only the run-time
+Python package and one for building only the development Python packages
+(testing, linting etc.). Then creates a run-time image that installs the
+run-time system dependencies and copies the virtual environment from the
+run-time builder. Then creates a development image based off the run-time one
+and merges the development virtualenv with the production one.
 
-```
-$ docker build --quiet --file basic-slim-image.dockerfile . >/dev/null
-$ echo '# cache busting comment' >> pyproject.toml
-$ time docker build --quiet --file basic-slim-image.dockerfile . >/dev/null
+This is by far the most complicated setup, and requires managing two images (the
+production one and the dev one for testing etc.) but should result in the
+smallest production image.
 
-real	0m14.528s
-user	0m0.249s
-sys	0m0.067s
-```
+## Sizes
 
-## Slim Image with Stages
+Sizes taken from
 
-This relies on the assumption we can copy a virtual env (created from the
-[stdlib `venv`](https://docs.python.org/3/library/venv.html)) between images
-which requires (at least):
-
-* The virtualenvs have the same absolute paths in each image, this is because
-  shebangs are hard-coded in the programs in the virtualenv
-* The same runtime libraries are available in each image, e.g. if a Python
-  package is built in one image and linked against a PCRE library, the runtime
-  version of that library must exist in the same path in the second image.
-
-Size:
-
-```
-$ docker build --tag layered-slim-image --file layered-slim-image.dockerfile .
-$ docker images layered-slim-image --format "{{.Size}}"
-211MB
+``` console
+docker images --format '{{.Size}}' <image-tag>
 ```
 
-Uncached build time, takes longer since each layer needs to install some extra
-packages (but these should be cached for all future builds):
+| Image Name | Size |
+| --- | --- |
+| `basic-full-image` | 1.05GB |
+| `basic-slim-image` | 398MB |
+| `layered-slim-image` | 260MB |
+| `multi-layered-slim-image` | 190MB |
+| `multi-layared-slim-image-dev` | 324MB |
 
-```
-$ time docker build --quiet --no-cache --file layered-slim-image.dockerfile . >/dev/null
+## Uncached build times
 
-real	0m46.029s
-user	0m0.261s
-sys	0m0.103s
-```
+Building via:
 
-Build with simulated new dependency:
-
-```
-$ docker build --quiet --file layered-slim-image.dockerfile . >/dev/null
-$ echo '# cache busting comment' >> pyproject.toml
-$ time docker build --quiet --file layered-slim-image.dockerfile . >/dev/null
-
-real	0m21.174s
-user	0m0.283s
-sys	0m0.122s
+``` console
+time make <image-tag> BUILD_ARGS='--no-cache'
 ```
 
-## Slim Images with multiple Stages
+Note: these values depend a lot on network latency/bandwidth (since most time is
+spent fetching packages). Though intuitively we expect the `basic-full-image` to
+be quickest since it only includes one call of each `apt-get update`, `apt-get
+install` `pip install`, and `poetry install`.
 
-Production image:
+| Image Name | Build Time |
+| --- | --- |
+| `basic-full-image` | 0m39.450s |
+| `basic-slim-image` | 0m56.897s |
+| `layered-slim-image` | 0m50.445s |
+| `multi-layered-slim-image` | 1m4.042s |
+| `multi-layared-slim-image-dev` | 0m55.733s |
 
-```
-$ docker build --target production --tag multi-layered-slim-image --file multi-layered-slim-image.dockerfile .
-$ docker images multi-layered-slim-image --format "{{.Size}}"
-140MB
-```
+## Code change build times
 
-Development image:
+Simulating a change to the code under `src/` which shouldn't require
+reinstalling any dependencies.
 
-```
-$ docker build --target development --tag multi-layered-slim-image-development --file multi-layered-slim-image.dockerfile .
-$ docker images multi-layered-slim-image-development --format "{{.Size}}"
-233MB
-```
+| Image Name | Build Time |
+| --- | --- |
+| `basic-full-image` | 0m4.812s |
+| `basic-slim-image` | 0m4.629s |
+| `layered-slim-image` | 0m4.204s |
+| `multi-layered-slim-image` | 0m3.799s |
+| `multi-layared-slim-image-dev` | 0m8.553s |
 
-Build time, takes longer since there are two sets of `apt install` calls,
-transferring context between images also takes time (that grows as the size of
-this, i.e. the size of Python packages, grows):
+## New dependency build times
 
-```
-$ time docker build --quiet --no-cache --file multi-layered-slim-image.dockerfile . >/dev/null
+Simulating a new dependency by just adding a line to `pyproject.toml`
 
-real	0m57.473s
-user	0m0.243s
-sys	0m0.065s
-```
+| Image Name | Build Time |
+| --- | --- |
+| `basic-full-image` | 0m27.440s |
+| `basic-slim-image` | 0m30.197s |
+| `layered-slim-image` | 0m21.804s |
+| `multi-layered-slim-image` | 0m22.052s |
+| `multi-layared-slim-image-dev` | 0m36.885s |
 
 ```
 $ docker build --quiet --file multi-layered-slim-image.dockerfile . >/dev/null
