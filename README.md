@@ -29,10 +29,10 @@ installs all the dependencies on top.
 Uses a slim Debian based Python image. This means we have to manually add some
 required build and run-time dependencies. Specifically:
 
-* A C compiler (`gcc`) since we need to build a C extension
-* `libc-dev` development files and headers for the GNU C library
-* `libprce3-dev` just for demonstration. This is just an optional extra for
-`uwsgi`
+  - A C compiler (`gcc`) since we need to build a C extension
+  - `libc-dev` development files and headers for the GNU C library
+  - `libprce3-dev` just for demonstration. This is just an optional extra for
+    `uwsgi`
 
 We save space on all the extra bits installed on the full Debian image that we
 don't need.
@@ -43,8 +43,8 @@ Builds all dependencies into a virtualenv a slim Debian based Python image. This
 virtualenv is then copied into a final slim Debian based python image which also
 includes some required run-time dependencies. Specifically:
 
-* `libprce3` just for demonstration. This is just an optional extra for
-`uwsgi`, it is the run-time counterpart to `libprce3-dev`
+  - `libprce3` just for demonstration. This is just an optional extra for
+    `uwsgi`, it is the run-time counterpart to `libprce3-dev`
 
 We save space on the difference in size between the build-time and run-time
 dependencies.
@@ -72,7 +72,7 @@ across and finally install them in the production image.
 This results in a large image since the production image includes both the
 installed dependencies and the wheels they were installed from (even though we
 `rm` them, since they were included in a layer from a `COPY` instruction).
-However, copying the wheels _should be_ quicker than copying the entire
+However, copying the wheels *should be* quicker than copying the entire
 virtualenv since there are fewer files: one `*.whl` file per dependency rather
 than however many files the installed package expands to (though I've yet to
 benchmark this).
