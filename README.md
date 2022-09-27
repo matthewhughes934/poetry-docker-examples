@@ -140,119 +140,24 @@ Simulating a new dependency by just adding a line to `pyproject.toml`
 | `multi-layered-slim-image` | 0m22.052s |
 | `multi-layared-slim-image-dev` | 0m36.885s |
 
-```
-$ docker build --quiet --file multi-layered-slim-image.dockerfile . >/dev/null
-$ echo '# cache busting comment' >> pyproject.toml
-$ time docker build --quiet --file multi-layered-slim-image.dockerfile . >/dev/null
-
-real	0m26.507s
-user	0m0.254s
-sys	0m0.084s
-```
-
 ## Examples with Docker Buildkit
-
-### Basic Slim Image with Cache mounting
-
-With Docker BuildKit you can use a [cache
-mount](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#run---mounttypecache)
-to cache some data between builds. An ideal target for this is the cache used
-by pip and poetry. Since we're using Docker Buildkit, we ex
-
-Build size:
-
-```
-$ DOCKER_BUILDKIT=1 docker build --progress plain --quiet --tag basic-slim-image-buildkit --file basic-slim-image-buildkit.dockerfile . >/dev/null
-$ docker images basic-slim-image-buildkit --format "{{ .Size }}"
-408MB
-```
-
-The size difference appears to be the size of the stored cache (grep for
-`errexit` to find commands from our image, and `tac` just to make the order
-follow the `dockerfile`):
-
-```
-$ docker history \
-    --no-trunc \
-    --format '{{ .CreatedBy }}\t{{ .Size }}\t{{ .Comment }}' \
-    --human basic-slim-image \
-    | grep -- '-o errexit' \
-    | grep --invert-match '#(nop)' \
-    | tac
-/bin/bash -o errexit -o nounset -o pipefail -c apt-get update;     apt-get install --assume-yes --no-install-recommends         gcc         libc-dev         libpcre3-dev;     rm --recursive --force /var/lib/apt/lists/*;     pip install --progress-bar off --no-cache poetry	163MB	
-/bin/bash -o errexit -o nounset -o pipefail -c POETRY_CACHE_DIR=/tmp/poetry-cache poetry install;     rm --recursive /tmp/poetry-cache	12.4MB	
-```
-
-Compare with:
-
-```
-$ docker history \
-    --no-trunc \
-    --format '{{ .CreatedBy }}\t{{ .Size }}' \
-    --human basic-slim-image-buildkit \
-    | grep -- '-o errexit' \
-    | grep --invert-match '#(nop)' \
-    | tac
-SHELL [/bin/bash -o errexit -o nounset -o pipefail -c]	0B
-RUN /bin/bash -o errexit -o nounset -o pipefail -c apt-get update;     apt-get install --assume-yes --no-install-recommends         gcc         libc-dev         libpcre3-dev;     rm --recursive --force /var/lib/apt/lists/*;     pip install --progress-bar off --no-cache poetry # buildkit	163MB
-RUN /bin/bash -o errexit -o nounset -o pipefail -c mount=type=cache,target=/root/.cache     poetry install # buildkit	128MB
-```
-
-We see the `apt` and `pip` install command took up the same space, but the
-`poetry install` command was much larger in the second image where we persist
-the cache.
-
-Uncached build time:
-
-```
-$ time DOCKER_BUILDKIT=1 docker build --no-cache --progress plain --quiet --file basic-slim-image-buildkit.dockerfile . >/dev/null
-
-real	0m36.558s
-user	0m0.076s
-sys	0m0.017s
-```
-
-Build with simulated new dependency. This is where we hope for a speed up due
-to being able to re-use `poetry`'s cache
-
-```
-$ DOCKER_BUILDKIT=1 docker build --progress plain --quiet --file basic-slim-image-buildkit.dockerfile . >/dev/null
-$ echo '# cache busting comment' >> pyproject.toml
-$ time DOCKER_BUILDKIT=1 docker build --progress plain --quiet --file basic-slim-image-buildkit.dockerfile . >/dev/null
-
-real	0m15.862s
-user	0m0.036s
-sys	0m0.043s
-```
 
 ### Layered Slim Image with Cache mounting
 
-Size, note we no longer have cache in the final image, since it exists only in
-the intermediate layer:
+`docker/dockerfile:1.2` introduced the [`RUN --mount`
+syntax](https://github.com/moby/buildkit/blob/47e953b294d4a5b4a1dfd68aec788c3642dbf5a7/frontend/dockerfile/docs/reference.md#run---mount)
+including `cache` mounts which:
 
-```
-$ DOCKER_BUILDKIT=1 docker build --quiet --progress plain --tag layered-slim-image-buildkit --file layered-slim-image-buildkit.dockerfile . >/dev/null
-$ docker images layered-slim-image-buildkit --format '{{ .Size }}'
-211MB
-```
+> Mount a temporary directory to cache directories for compilers and package
+> managers.
 
-Uncached build time
+Importantly, these caches do not contribute to the size of the final image but
+while allowing us to store `poetry`'s cache. This means repeated builds can
+leverage this cache, though I don't think there's much benefit for these in
+environments where images are build from a clean context each time, e.g. CI.
 
-```
-$ time DOCKER_BUILDKIT=1 docker build --progress plain --no-cache --file layered-slim-image-buildkit.dockerfile . >/dev/null
-
-real	0m35.408s
-user	0m0.283s
-sys	0m0.102s
-```
-
-Build with simulated new dependency:
-
-```
-$ DOCKER_BUILDKIT=1 docker build --quiet --progress plain --file layered-slim-image-buildkit.dockerfile . >/dev/null
-$ time DOCKER_BUILDKIT=1 docker build --quiet --progress plain --file layered-slim-image-buildkit.dockerfile . >/dev/null
-
-real	0m16.724s
-user	0m0.059s
-sys	0m0.011s
-```
+See `layered-slim-image-buildkit.dockerfile` for details, this builds are image
+the same size as `layered-slim-image.dockerfile`. You can verify the cache
+behaviour by adding some verbose flags to `poetry install` and after
+invalidating the Docker cache for that stage observe that packages are not
+fetched over the network.
